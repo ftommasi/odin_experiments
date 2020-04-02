@@ -56,7 +56,6 @@ b64_encode :: proc(input : string) -> string {
     chunk :[4]u8; //init to zero
     //in this case we can parse a non-padded segment
     if len(input) >= 3 {
-        fmt.println("hitting 3");
         chunk[0] |= (input[0] & 0xFC) >> 2;
         chunk[1] |= ((input[0] & 0x03) << 4) | ((input[1] & 0xF0) >> 4);
         chunk[2] |= ((input[1] & 0x0F) << 2) | ((input[2] & 0xC0) >> 6);
@@ -81,7 +80,6 @@ b64_encode :: proc(input : string) -> string {
         //fmt.println("looking at [v:", val,"i:", idx,"]");
         //fmt.println(_toHex(val));
         encoded_char := rune(B64TABLE[val]);
-        fmt.println(encoded_char);
         temp_chunk := fmt.aprintf("%v",encoded_char);
         temp : []string = {ret_val,temp_chunk};
         ret_val = strings.concatenate(temp) ;
@@ -99,24 +97,24 @@ b64_decode :: proc(input : string) -> string {
     chunk :[4]u8; //init to zero
     //1 padding
     if rune(in_slice[3]) == '='{
-        chunk[0] = ;
-        chunk[1] = ;
-        chunk[2] = ;
-        chunk[3] = 0;
+        //chunk[0] = ;
+        //chunk[1] = ;
+        //chunk[2] = ;
+        //chunk[3] = 0;
     }
     //2 padding
     else if   rune(in_slice[2]) == '='{
-        chunk[0] = ;
-        chunk[1] = ;
-        chunk[2] = 0;
-        chunk[3] = 0;
+        //chunk[0] = ;
+        //chunk[1] = ;
+        //chunk[2] = 0;
+        //chunk[3] = 0;
     }
     //no padding
     else{
-        chunk[0] = in_slice[0] & ;
-        chunk[1] = in_slice[] & in_slice[];
-        chunk[2] = in_slice[] & in_slice[];
-        chunk[3] = in_slice[] & in_slice[];
+        //chunk[0] = in_slice[0] & ;
+        //chunk[1] = in_slice[] & in_slice[];
+        //chunk[2] = in_slice[] & in_slice[];
+        //chunk[3] = in_slice[] & in_slice[];
     }
 
     //need to recurse    
@@ -126,12 +124,16 @@ b64_decode :: proc(input : string) -> string {
 
 main :: proc () {
     //known values to verify initial functionality
-    //test_sentence_in := "Test Sentence";
-    //test_sentence_out := "VGVzdCBTZW50ZW5jZQo=";
-    test_sentence_in := "Man";
-    test_sentence_out := "TWFu";
+    test_sentences_in  :[]string = {"Man" , "Ma"  , "M"   , "Test Sentence"        };
+    test_sentences_out :[]string = {"TWFu", "TWE=", "TQ==", "VGVzdCBTZW50ZW5jZQo=" };
+    
     
     //test
-    assert(b64_encode(test_sentence_in) == test_sentence_out);
-    assert(b64_decode(test_sentence_out) == test_sentence_in);
+    for _,idx in test_sentences_in{
+        fmt.println("Testing: ",test_sentences_in[idx], test_sentences_out[idx]);
+        assert(b64_encode(test_sentences_in[idx]) == test_sentences_out[idx]);
+        fmt.println("   encode pass");
+        assert(b64_decode(test_sentences_out[idx]) == test_sentences_in[idx]);
+        fmt.println("   decode pass");
+    }
 }
