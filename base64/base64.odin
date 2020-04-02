@@ -49,6 +49,7 @@ _toHex :: proc (_n : u8) -> string{
     return ret_val;
 }
 
+//NEED TO REMOVE SPACES!!!
 b64_encode :: proc(input : string) -> string {
     ret_val : string; 
 
@@ -87,8 +88,24 @@ b64_encode :: proc(input : string) -> string {
 
     fmt.println("my chunks are", chunk, " -> ",ret_val);
 
-    //need to recurse
-    return ret_val;
+    //need to recurse 
+    alias : string;
+    fmt.println("about to recurse. input:",input);
+    if len(input) >= 4{
+        alias =  input[4:];
+    } 
+    else{
+        alias =  "";
+    }
+    final :[]string ;
+    if alias != "" {
+        fmt.println("recursing with",alias);
+        final = {ret_val,b64_encode(alias)}; 
+    }
+    else{
+            final = {ret_val};
+    }
+    return strings.concatenate(final);
 }
 
 b64_decode :: proc(input : string) -> string {
@@ -125,8 +142,24 @@ b64_decode :: proc(input : string) -> string {
 
     fmt.println("my chunks are", chunk, " -> ",ret_val);
 
-    //need to recurse    
-    return ret_val;
+    //need to recurse 
+    alias : string;
+    fmt.println("about to recurse. input:",input);
+    if len(input) >= 4{
+        alias =  input[4:];
+    } 
+    else{
+        alias =  "";
+    }
+
+    final :[]string ;
+    if alias != "" {
+        final = {ret_val,b64_decode(alias)}; 
+    }
+    else{
+            final = {ret_val};
+    }
+    return strings.concatenate(final);
 }
 
 
