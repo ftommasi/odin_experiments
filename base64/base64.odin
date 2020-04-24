@@ -49,7 +49,6 @@ _toHex :: proc (_n : u8) -> string{
     return ret_val;
 }
 
-//NEED TO REMOVE SPACES!!!
 b64_encode :: proc(input : string) -> string {
     ret_val : string; 
 
@@ -108,7 +107,7 @@ b64_encode :: proc(input : string) -> string {
     return strings.concatenate(final);
 }
 
-b64_decode :: proc(input : string) -> string {
+_b64_decode :: proc(input : string) -> string {
     ret_val : string;
     in_slice := input[:4];
     chunk :[3]int; //init to zero
@@ -154,7 +153,7 @@ b64_decode :: proc(input : string) -> string {
 
     final :[]string ;
     if alias != "" {
-        final = {ret_val,b64_decode(alias)}; 
+        final = {ret_val,_b64_decode(alias)}; 
     }
     else{
             final = {ret_val};
@@ -163,10 +162,14 @@ b64_decode :: proc(input : string) -> string {
 }
 
 
+b64_decode :: proc(input : string) -> string{
+    return _b64_decode(strings.trim_space(input));
+}
+
 main :: proc () {
     //known values to verify initial functionality
-    test_sentences_in  :[]string = {"Man" , "Ma"  , "M"   , "Test Sentence"        };
-    test_sentences_out :[]string = {"TWFu", "TWE=", "TQ==", "VGVzdCBTZW50ZW5jZQo=" };
+    test_sentences_in  :[]string = {"Man" , "Ma"  , "M"   , "Test Sentence", "Man is distinguished, not only by his reason, but by this singular passion from other animals, which is a lust of the mind, that by a perseverance of delight in the continued and indefatigable generation of knowledge, exceeds the short vehemence of any carnal pleasure."}; 
+    test_sentences_out :[]string = {"TWFu", "TWE=", "TQ==", "VGVzdCBTZW50ZW5jZQo=" ,"TWFuIGlzIGRpc3Rpbmd1aXNoZWQsIG5vdCBvbmx5IGJ5IGhpcyByZWFzb24sIGJ1dCBieSB0aGlzIHNpbmd1bGFyIHBhc3Npb24gZnJvbSBvdGhlciBhbmltYWxzLCB3aGljaCBpcyBhIGx1c3Qgb2YgdGhlIG1pbmQsIHRoYXQgYnkgYSBwZXJzZXZlcmFuY2Ugb2YgZGVsaWdodCBpbiB0aGUgY29udGludWVkIGFuZCBpbmRlZmF0aWdhYmxlIGdlbmVyYXRpb24gb2Yga25vd2xlZGdlLCBleGNlZWRzIHRoZSBzaG9ydCB2ZWhlbWVuY2Ugb2YgYW55IGNhcm5hbCBwbGVhc3VyZS4=" };
     
     
     //test
