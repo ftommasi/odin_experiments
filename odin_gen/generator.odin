@@ -12,6 +12,9 @@ ODIN_TEMPLATE_STRING :: `//this code is auto-generated from existing files.
 //edit at your own risk
 
 package {PACKAGE_NAME}
+
+import "core:fmt"
+
 when ODIN_OS=="windows" do foreign import mini_math "{PACKAGE_NAME}.lib";
 when ODIN_OS=="linux"   do foreign import mini_math "{PACKAGE_NAME}.a";
 
@@ -20,6 +23,10 @@ when ODIN_OS=="linux"   do foreign import mini_math "{PACKAGE_NAME}.a";
 foreign {PACKAGE_NAME} {
     {VARS}
     {FUNCS}
+}
+
+main ::proc(){
+    fmt.println("Auto generate successful");
 }`;
 
 
@@ -90,34 +97,119 @@ generate_implementation_file :: proc(package_name : string){
     template_string ::IMPLEMENTATION_TEMPLATE_STRING;
     replaced,worked := strings.replace_all(template_string,"{PACKAGE_NAME}",package_name);
     defer delete(replaced);
-    if worked{
-        header_file := strings.concatenate(([]string){package_name,".h"});
-        defer delete(header_file);
+    if !worked{
+        fmt.println("Error replacing package name");
+        return;
+    }
+    header_file := strings.concatenate(([]string){package_name,".h"});
+    defer delete(header_file);
 
-        source_file := strings.concatenate(([]string){package_name,".c"});
-        defer delete(source_file);
+    source_file := strings.concatenate(([]string){package_name,".c"});
+    defer delete(source_file);
 
-        replaced,worked = update_implementation_file(package_name,header_file);
-        defer delete(replaced);
+    replaced,worked = update_implementation_file(package_name,header_file);
+    defer delete(replaced);
 
-        if worked{
-            split_by_space := strings.split(replaced, "\n");
-            defer delete(split_by_space);
+    if !worked{
+        fmt.println("Error updating implementation file");
+    }
+    split_by_space := strings.split(replaced, "\n");
+    defer delete(split_by_space);
 
-            //delete last 2 lines of SHL .h file
-            //this will only work on my style of formatting SHL. this may cause bugs
-            no_endifs := strings.join(split_by_space[:len(split_by_space)-3],"\n");
-            defer delete(no_endifs);
+    //delete last 2 lines of SHL .h file
+    //this will only work on my style of formatting SHL. this may cause bugs
+    no_endifs := strings.join(split_by_space[:len(split_by_space)-3],"\n");
+    defer delete(no_endifs);
 
-            //debug_print(no_endifs);
-            worked_3 := os.write_entire_file(source_file,transmute([]byte)no_endifs);
-        }
+    //debug_print(no_endifs);
+    worked_3 := os.write_entire_file(source_file,transmute([]byte)no_endifs);
+
+    if !worked_3{
+        fmt.println("Error writing implementation file");
     }
 }
 
+generate_odin_bridge :: proc(SPLIT_TOKEN,package_name : string) -> string{
+    structs:= generate_odin_structs(SPLIT_TOKEN,package_name);
+    with_package,package_worked := strings.replace_all(ODIN_TEMPLATE_STRING,"{PACKAGE_NAME}",package_name);
+    with_structs,struct_worked := strings.replace_all(ODIN_TEMPLATE_STRING,"{STRUCTS}",structs);
+    return with_structs;
+}
 
-generate_odin_bridge :: proc(){
+generate_odin_structs :: proc(SPLIT_TOKEN,package_name : string) -> string{
 
+    //this portion generates the "odin bridge" file for the compiled c static library
+    odin_template := ODIN_TEMPLATE_STRING;
+    header_file := strings.concatenate(([]string){package_name,".h"});
+    defer delete(header_file);
+
+    //here we update structs
+    file_data,success := os.read_entire_file(header_file);
+    defer delete(file_data);
+    if !success{
+        fmt.println("error reading file");
+        return "";
+    }
+    _r_file_as_string:= string(file_data);
+    //defer delete(_r_file_as_string); //<- This core dumps because its a cast and file_data get deleted above.
+
+    //remove \r beause windows is a retarded Os
+    
+    file_as_string,worked := strings.replace_all(_r_file_as_string,"\r","");
+    defer delete(file_as_string); 
+    if !worked{
+        fmt.println("error replacing \\r");
+        return "";
+    }
+
+    split_by_token := strings.split(file_as_string, SPLIT_TOKEN);
+    defer delete(split_by_token);
+
+    struct_strings,funcs_strings,vars_strings :[dynamic]string;
+     
+    struct_start_marker,struct_end_marker : int;
+    funcs_start_marker ,funcs_end_marker  : int;
+    vars_start_marker  ,vars_end_marker   : int;
+    parsing : bool = true;
+
+    idx : int = 0;
+    //decompose into struct, procs, and vars
+    for parsing{
+        token := split_by_token[idx];
+        //if we hit #define XXXX_IMPLEMENTATION we are done
+        if strings.contains(token,"IMPLEMENTATION"){
+            parsing = false;
+        }
+       
+        if strings.contains(token,"ODIN_STRUCTS"){
+            new_idx, struct_joined := process_sub_section("ODIN_STRUCTS",SPLIT_TOKEN, split_by_token, idx);              
+            idx = new_idx;
+            append(&struct_strings,struct_joined);
+        }
+        if strings.contains(token,"ODIN_FUNCS"){
+            new_idx, funcs_joined := process_sub_section("ODIN_FUNCS",SPLIT_TOKEN, split_by_token, idx);              
+            idx = new_idx;
+            append(&funcs_strings,funcs_joined);
+        }
+        if strings.contains(token,"ODIN_VARS"){
+            new_idx, vars_joined := process_sub_section("ODIN_VARS",SPLIT_TOKEN, split_by_token, idx);              
+            idx = new_idx;
+            append(&vars_strings,vars_joined);
+        }
+        idx += 1;
+    }
+       
+        parsed_structs := parse_struct_string(struct_strings[0]); //this gives the right result
+        defer delete(parsed_structs);
+       
+        final_structs := strings.join(parsed_structs[:],"\n");
+        return final_structs;
+
+        /*getting ready to delete these tee bee aich */
+        //structs_worked := os.write_entire_file("odin_structs.odin",transmute([]byte)final_structs);
+        //debug_print("structs:",struct_strings);
+        //debug_print("funcs  :", funcs_strings);
+        //debug_print("vars   :",  vars_strings);
 }
 
 
@@ -165,14 +257,10 @@ parse_struct_string :: proc(struct_string : string) -> [dynamic]string{
         defer delete(split_by_close_curly);
        
         no_nrls,no_nls_work := strings.replace_all(split_by_close_curly[0],"\n","");
-        defer delete(no_nrls);
+        //defer delete(no_nrls); //<- this is a doubel free
         
         no_nls,no_nl_work := strings.replace_all(no_nrls,"\r","");
         defer delete(no_nls);
-
-
-//        no_colons := strings.join(no_nls, "");
-//        defer delete(no_colons);
 
         all_members:= strings.split(no_nls,";");
         defer delete(all_members);
@@ -180,7 +268,12 @@ parse_struct_string :: proc(struct_string : string) -> [dynamic]string{
         struct_name = split_by_open_curly[0];
        
         with_struct,struct_worked := strings.replace_all(STRUCT_TEMPLATE,"{STRUCT_NAME}",struct_name);
-        defer delete(with_struct);
+
+        if !struct_worked{
+            fmt.println("error replacing structs");
+            return nil;
+        }
+        defer delete(with_struct); // <- this is a double free
        
         bridged_members :[dynamic]string;
         MEMBER_TEMPLATE :: `{MEMBER_NAME} : {MEMBER_TYPE},`;
@@ -250,11 +343,18 @@ parse_struct_string :: proc(struct_string : string) -> [dynamic]string{
                 //debug_print("type->",member_type);
                 bridge_type,memrepl_worked := strings.replace_all(MEMBER_TEMPLATE,"{MEMBER_TYPE}",member_type);
                 defer delete(bridge_type);
+                if !memrepl_worked{
+                    fmt.println("Error replacing members");
+                    return nil;
+                }
 
                 bridge_entry,tpye_worked := strings.replace_all(bridge_type,"{MEMBER_NAME}",member_name);
-                //debug_print(bridge_entry);
-                //defer delete(bridged_entry);
-                //debug_print("appending ->",bridge_entry);
+                if !tpye_worked{
+                    fmt.println("Error replacing members");
+                    return nil;
+                }
+
+                //defer delete(bridged_entry); <- this segfaults
                 append(&bridged_members,bridge_entry);
             }
         }
@@ -278,66 +378,13 @@ parse_struct_string :: proc(struct_string : string) -> [dynamic]string{
 main :: proc() {
     package_name := "mini_math";
     SPLIT_TOKEN :: "\n";
+
     //generate_implementation_file(package_name);
-    //genereate_odin_bridge();
+    odin_bridge := generate_odin_bridge(SPLIT_TOKEN,package_name);
 
-    //this portion generates the "odin bridge" file for the compiled c static library
-    odin_template := ODIN_TEMPLATE_STRING;
-    header_file := strings.concatenate(([]string){package_name,".h"});
-    defer delete(header_file);
+    filename := strings.concatenate([]string{package_name,".odin"});
+    debug_print("writing") ;
+    final_write_success := os.write_entire_file(filename, transmute([]byte)odin_bridge);
+    debug_print("written");
 
-    //here we update structs
-    file_data,success := os.read_entire_file(header_file);
-    defer delete(file_data);
-    if success{
-        file_as_string:= string(file_data);
-        //defer delete(file_as_string); //<- This core dumps because its a cast and file_data get deleted above.
-       
-        split_by_token := strings.split(file_as_string, SPLIT_TOKEN);
-        defer delete(split_by_token);
-
-        struct_strings,funcs_strings,vars_strings :[dynamic]string;
-         
-        struct_start_marker,struct_end_marker : int;
-        funcs_start_marker ,funcs_end_marker  : int;
-        vars_start_marker  ,vars_end_marker   : int;
-        parsing : bool = true;
-
-        idx : int = 0;
-        //decompose into struct, procs, and vars
-        for parsing{
-            token := split_by_token[idx];
-            //if we hit #define XXXX_IMPLEMENTATION we are done
-            if strings.contains(token,"IMPLEMENTATION"){
-                parsing = false;
-            }
-           
-            if strings.contains(token,"ODIN_STRUCTS"){
-                new_idx, struct_joined := process_sub_section("ODIN_STRUCTS",SPLIT_TOKEN, split_by_token, idx);              
-                idx = new_idx;
-                append(&struct_strings,struct_joined);
-            }
-            if strings.contains(token,"ODIN_FUNCS"){
-                new_idx, funcs_joined := process_sub_section("ODIN_FUNCS",SPLIT_TOKEN, split_by_token, idx);              
-                idx = new_idx;
-                append(&funcs_strings,funcs_joined);
-            }
-            if strings.contains(token,"ODIN_VARS"){
-                new_idx, vars_joined := process_sub_section("ODIN_VARS",SPLIT_TOKEN, split_by_token, idx);              
-                idx = new_idx;
-                append(&vars_strings,vars_joined);
-            }
-            idx += 1;
-        }
-       
-        parsed_structs := parse_struct_string(struct_strings[0]); //this gives the right result
-        defer delete(parsed_structs);
-       
-        final_structs := strings.join(parsed_structs[:],"\n");
-        defer delete(final_structs);
-        structs_worked := os.write_entire_file("odin_structs.odin",transmute([]byte)final_structs);
-        //debug_print("structs:",struct_strings);
-        //debug_print("funcs  :", funcs_strings);
-        //debug_print("vars   :",  vars_strings);
-    }
 }
